@@ -1,15 +1,18 @@
 name: Building and Pushing Python Image to Google Cloud Platform
 on:
-  push:
-    pull_request:
+  pull_request:
+    types: closed
+    branches:
       - main
 jobs:
   build-push-gcr:
     name: Build and Push to GCP
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: mailchimp-data-science
       PROJECT_ID: ${{ secrets.PROJECT_ID }} 
+      APPLICATION_NAME: myapp
+      REGION: us-east1
+      PROJECT_NUMBER: ${{secrets.PROJECT_NUMBER}}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -19,22 +22,16 @@ jobs:
         service_account_key: ${{ secrets.SERVICE_ACCOUNT_KEY }}
         project_id: ${{ secrets.PROJECT_ID }} 
         export_default_credentials: true
-
-    - name: Build Docker Image
-      run: docker build -t $IMAGE_NAME:latest .
-
-    - name: Automatic Tagging of Releases
-      id: increment-git-tag
-      run: |
-        bash ./scripts/git_update.sh -v major
-    - name: Configure Docker Client
+    - name: Build
       run: |-
-        gcloud auth configure-docker --quiet
-    - name: Push Docker Image to Container Registry (GCR)
-      env:
-        GIT_TAG: ${{ steps.increment-git-tag.outputs.git-tag }}
+        gcloud builds submit --quiet  --tag "gcr.io/$PROJECT_ID/$APPLICATION_NAME:$GITHUB_SHA"
+
+    # Deploy image to Cloud Run
+    - name: Deploy
       run: |-
-        docker tag $IMAGE_NAME:latest gcr.io/$PROJECT_ID/$IMAGE_NAME:latest
-        docker tag $IMAGE_NAME:latest gcr.io/$PROJECT_ID/$IMAGE_NAME:$GIT_TAG
-        docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:latest
-        docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:$GIT_TAG
+        gcloud run deploy $APPLICATION_NAME \
+          --quiet \
+          --region "$REGION" \
+          --image "gcr.io/$PROJECT_ID/$APPLICATION_NAME:$GITHUB_SHA" \
+          --platform "managed" \
+          --allow-unauthenticated
