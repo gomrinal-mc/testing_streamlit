@@ -1,7 +1,8 @@
 name: Building and Pushing Python Image to Google Cloud Platform
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 jobs:
   build-push-gcr:
     name: Build and Push to GCP
